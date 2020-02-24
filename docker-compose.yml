@@ -7,12 +7,10 @@ services:
         ##ports:
         ##  - "123/udp"
         network_mode: host
-        volumes:
-          - .:/rpi-ntp-server/config
         
         #restart: unless-stopped
-        #command: /usr/sbin/ntpd
         
         restart: "no"
         tty: true
-        command: tail -F /dev/null
+        #command: tail -F /dev/null
+        command: service ntp start
