@@ -11,4 +11,4 @@ services:
         
         restart: "no"
         tty: true
-        command: tail -F anything
+        command: tail -F /dev/null

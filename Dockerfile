@@ -1,9 +1,7 @@
 FROM debian:stretch
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends ntp \
-    && apt-get clean -q \
-    && rm -Rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y \
+	ntp
 
 RUN chgrp root /var/lib/ntp && chmod g+w /var/lib/ntp
 
