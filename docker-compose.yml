@@ -13,4 +13,6 @@ services:
         restart: "no"
         tty: true
         #command: tail -F /dev/null
-        command: service ntp start
+        command: >
+            bash -c "service ntp start 
+            && tail -F /dev/null"
