@@ -4,10 +4,14 @@ services:
         container_name: ntp
         hostname: ntp
         build: .
-        ports:
-          - "123/udp"
+        ##ports:
+        ##  - "123/udp"
+        network_mode: host
+        volumes:
+          - .:/rpi-ntp-server/config
+        
         #restart: unless-stopped
-        #commend: /usr/sbin/ntpd
+        #command: /usr/sbin/ntpd
         
         restart: "no"
         tty: true

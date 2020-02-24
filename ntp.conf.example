@@ -37,20 +37,25 @@ pool ntp.ubuntu.com
 # up blocking replies from your own upstream servers.
 
 # By default, exchange time with everybody, but don't allow configuration.
-restrict -4 default kod notrap nomodify nopeer noquery limited
-restrict -6 default kod notrap nomodify nopeer noquery limited
+##restrict -4 default kod notrap nomodify nopeer noquery limited
+##restrict -6 default kod notrap nomodify nopeer noquery limited
+restrict default limited kod nomodify notrap nopeer
+restrict -6 default limited kod nomodify notrap nopeer
 
 # Local users may interrogate the ntp server more closely.
 restrict 127.0.0.1
 restrict ::1
 
 # Needed for adding pool entries
-restrict source notrap nomodify noquery
+##restrict source notrap nomodify noquery
 
 # Clients from this (example!) subnet have unlimited access, but only if
 # cryptographically authenticated.
 #restrict 192.168.123.0 mask 255.255.255.0 notrust
 
+## Allow a subnet to receive time service and query server statistics
+restrict 192.168.1.0 mask 255.255.255.0 nomodify notrap nopeer
+restrict 2001:838:0:1:: mask ffff:ffff:ffff:ffff:: nomodify notrap nopeer
 
 # If you want to provide time to your local subnet, change the next line.
 # (Again, the address is an example only.)
