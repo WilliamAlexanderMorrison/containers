@@ -1,4 +1,5 @@
-# Introduction of my use-case
+# Creating a Raspberry Pi NTP Server with docker-compose
+## Introduction of my use-case
 
 * I am attemping to force security for my home network by way of the controls available on my router. 
 * I desire to prevent all internet traffic in or out for most of my IoT devices. 
