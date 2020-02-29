@@ -1,59 +1,48 @@
-A NTP server in a container (docker variant)
-============================================
+# Introduction of my use-case
 
-While I'm trying to learn more about LXC (and LXD) and Docker with the goal to see the advantages and inconveniences of both solutions, I decided to try to put a NTP server (stratum 3) in a container and why not make it run on my Raspberry Pi to provide the time for my other LAN devices.
+* I am attemping to force security for my home network by way of the controls available on my router. 
+* I desire to prevent all external traffic in or out for most of my IoT devices. 
+* I have a 'primary' Raspberry Pi as my  home automation device which is allowed to access the internet.
+* I have a 'secondary' Raspberry Pi which is prevented from any internet access. 
 
-My first and current attempt is to run it on a standard PC (x86_64) and try to understand how to run it with the least privileges possible. I could simply run it as an unprivilege container, but then I won't learn much ;-)
+The problem I discovered is that my secondary Raspberry Pi would lose time when it was powered down. This is due to the fact that Raspberry Pis do not have a hardward clock. As such, a [Raspbian package](https://manpages.debian.org/jessie/fake-hwclock/fake-hwclock.8.en.html) stores the last known time in a file.
 
-I understand that in the end running a NTP server on a Raspberry Pi is not really smart. The Pi does not have a real-time clock (RTC), so if it loses synchronisation with the remote NTP server, the clock run really lose (possibly using the "frequency ticks" of the CPU, but with dynamic frequency that could be not so accurate). But anyway, the Pi is hackable and it is possible to add a RTC to it, and probably I could pick up an RTC component that is anyway better than those in most PC motherboards.
+In order to remedy the situation I wanted my 'primary' Pi to function as a NTP server that could feed the current time to my 'secondary' Pi. I forked [jcberthon's project](https://github.com/jcberthon/containers) which created a NTP service in a docker container. That version used somewhat complicated docker configurations  to have the container reach back into the device on which the container was hosted to serve as the time service. 
 
-So in the release soon release often approach, I'm starting step-by-step. First make it run on x86_64. Then I will try to make it run on ARM on my Raspberry Pi 2. And then much later, I will think of adding a RTC component to my Pi.
+That was too complicated for my tastes, so I:
+* Simplified the project to use docker-compose 
+* Changed the configurations so that the NTP server only provides the time the clients without changing the device on which the container is hosted
 
-_Note: the current container has been successfully tested on host (x86_64) running Docker 1.12.1 on Ubuntu 16.04 (AppArmor activated), CentOS 7 (SELinux enabled) and Fedora 24 (SELinux enabled), and using Docker 1.9.1 on openSUSE Leap 42.1 (AppArmor activated). You need to have docker version (>= 1.2.0 AND < 1.10) OR >= 1.12.0. If you have docker 1.10 or 1.11 you have the problem that it enforces a seccomp profile which disallow adjusting the host time from the container, eventhough the '--add-cap SYS_TIME' capability is defined. This was fixed in Docker 1.12.0 ([#22554](https://github.com/docker/docker/pull/22554)).  
-I therefore recommend using Docker >= 1.12.1._
+## Step-by-Step Instructions to Configure the NTP server with Docker-Compose
+* Install both Docker and Docker Compose following instructions in this [documentation](https://withblue.ink/2019/07/13/yes-you-can-run-docker-on-raspbian.html)
+* Create a directory with the docker and monitor configuration files in this repo by using the command `git clone https://github.com/WilliamAlexanderMorrison/rpi-ntp-server`
+* Navigate into the rpi-ntp-server directory 
+* Open the `ntp.conf.example` configuration file
+  * Configure the pools
+    * https://www.ntppool.org/en/ for a list of NTP pools
+  * Configure any network restrictions for the server
+    * http://support.ntp.org/bin/view/Support/AccessRestrictions
+* Build the docker with the command `docker-compose build`
+  * This will create a docker container with the rpi-ntp-server repo
+* Start the docker container with the command `docker-compose up -d`
+* Test that the server is providing the time when asked on another device
+  * I did this on a Windows device with the portable Windows app discussed here: https://superuser.com/a/1380456
 
-Regarding the Pi, I've seen that Alpine Linux does not provide the ntp server from www.ntp.org but a variant named openntpd supported by the OpenBSD project. This is fully OK, but I know how to configure the ntp server from ntp.org, so I will start with that and first pick up another base image for the Raspberry Pi, probably Debian or Ubuntu (which ever is smaller).
-
-Building the image
-------------------
-
-As a prerequisite, you need to have Docker properly installed (https://docs.docker.com/engine/installation/) and run your host on a x86_64 architecture. I'm running Docker 1.12, but it should work on older version of Docker as well (with the exception of versions 1.10 and 1.11 where you need to remove the seccomp profile when running this image), at least the building instructions. For other architectures (like 32 bit or ARM, etc. you would need to edit the Dockerfile and change the base image).
-
-To build it, simply run the command below (the command is the line starting with `$ ` but don't type those leading characters). You can of course replace `jcberthon/ntpd` by whatever name you wish to give your image.
-
-    $ docker build -t jcberthon/ntpd .
-    Sending build context to Docker daemon 2.048 kB
-    Step 1 : FROM ubuntu:16.04
-     ---> 45bc58500fa3
-    Step 2 : RUN apt-get update     && apt-get install -y --no-install-recommends ntp     && apt-get clean -q
-     ---> Using cache
-     ---> 0f5f582925db
-    Step 3 : ENTRYPOINT /usr/sbin/ntpd
-     ---> Running in 967ce652fadf
-     ---> 8ac170521e9c
-    Removing intermediate container 967ce652fadf
-    Successfully built 8ac170521e9c
-
-*Note: Currently the default NTPd configuration (from Ubuntu 16.04) is being used, so it just make sure your system synchronise to a pool of remote NTP server, but it can't yet provide time on your local network. That's the next step.*
-
-The image expose the port 123 (the default NTP port) to other containers.
-
-Running the image
------------------
-
-The ntp daemon needs to modify the system time of the host kernel. It is also a server running on port 123/UDP and therefore require privilege bind access. In addition, the daemon tries to lock some of its memory to avoid being swapped. Therefore, we need to provide a few privileges to our container if we want the daemon to control the clock on the host. We are going to use Linux capabilites for that, the support for this feature was added back in [Docker 1.2](https://github.com/docker/docker/blob/v1.2.0/CHANGELOG.md) (note that for Docker 1.10 and 1.11, the seccomp profile was disabling the added capabilities, this has been fixed in Docker 1.12.0+). And we will drop all other capabilities.
-
-    $ docker run --name ntpd --cap-drop ALL --cap-add NET_BIND_SERVICE --cap-add SYS_TIME --cap-add SYS_RESOURCE jcberthon/ntpd -g -n -l /var/log/ntpd.log
-
-The container run in foreground mode with this option (option `-n`), this is important for Docker so that it can keep track of the process and knows when the container should exit or not.
-
-If you are just interested in trying out this container and run it in the foreground with logs displayed on the console, execute this instead: `docker run --rm -it --cap-drop ALL --cap-add NET_BIND_SERVICE --cap-add SYS_TIME --cap-add SYS_RESOURCE jcberthon/ntpd -g -n` and you can use Ctrl+C to stop the container. The container instance will be automatically deleted (due to the use of the `--rm` option).
-
-If you want to use the ntpd option `-N` (which tries to elevate the ntpd priority), with the above command you will get `set_process_priority: No way found to improve our priority`. The `ntpd` daemon will still be running, so it is not blocking, but if you want to add that capability, you need to add `--cap-add SYS_NICE` to the command line.
-
-If you want to use this ntp server on your network, you can also publish the port by using the option `--publish 123:123/udp`.
-If you are running *Docker 1.10 or 1.11*, or have problems with permission denied messages, you could try disabling the seccomp profile, but security-wise this is not ideal. Just add the `--security-opt seccomp:unconfined` option to the `docker run ...` command line. I would recommend upgrading Docker rather than going down this path :-).
-
-In order to verify if your ntp server is running and if it is synchronised, you can use the `ntpq` command (see [ntpq man page](http://doc.ntp.org/4.2.8p4/ntpq.html) for more information).
-
-    $ docker exec -it ntpd ntpq -pn
+## Step-by-Step Instructions to Configure the Timedatectl package to reference your NTP server
+* Follow the Timedatectl configuration section of this guide: https://raspberrytips.com/time-sync-raspberry-pi/
+  * Open the Timedatectl configuration file
+```sudo nano /etc/systemd/timesyncd.conf```
+  * Uncomment out the NTP= line of the file
+  * Append your NTP server's device's IP or hostname
+    * I also configured a fallback NTP in case my server malfunctioned and I wanted to allow the device access to the internet to check the time
+```
+[Time]
+NTP=192.168.1.118
+FallbackNTP=0.debian.pool.ntp.org 1.debian.pool.ntp.org 2.debian.pool.ntp.org 3.debian.pool.ntp.org
+```
+* Follow the Enable or disable the time synchronization of this guide: https://raspberrytips.com/time-sync-raspberry-pi/
+```sudo timedatectl set-ntp true```
+* Reboot your Raspberry Pi
+```sudo reboot```
+* Test your device to ensure Timedatctl is working as expected as described in the Usage section of this guide: https://wiki.archlinux.org/index.php/systemd-timesyncd
+```timedatectl timesync-status```

@@ -1,18 +1,16 @@
-version: '3'
+version: '3.2'
 services:
     ntp:
         container_name: ntp
         hostname: ntp
         build: .
-        ##ports:
-        ##  - "123/udp"
-        network_mode: host
-        
-        #restart: unless-stopped
-        
-        restart: "no"
+        ports:
+          - target: 123
+            published: 123
+            protocol: udp
+            mode: host
+        restart: unless-stopped
         tty: true
-        #command: tail -F /dev/null
         command: >
             bash -c "service ntp start 
             && tail -F /dev/null"

@@ -10,7 +10,3 @@ ADD https://api.github.com/repos/WilliamAlexanderMorrison/rpi-ntp-server/git/ref
 RUN git clone https://github.com/WilliamAlexanderMorrison/rpi-ntp-server.git
 WORKDIR /rpi-ntp-server
 RUN cp ntp.conf.example /etc/ntp.conf
-
-#EXPOSE 123/udp
-
-#ENTRYPOINT ["/usr/sbin/ntpd"]
